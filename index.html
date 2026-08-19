@@ -102,10 +102,17 @@
   .modal-actions .spacer{flex:1;}
   #fileInput{display:none;}
 
-  nav.tabs{display:flex; gap:6px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px; width:max-content; margin-bottom:26px;}
+  nav.tabs{
+    display:flex; gap:6px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px;
+    width:max-content; max-width:100%; margin-bottom:26px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap;
+  }
+  nav.tabs::-webkit-scrollbar{display:none;}
+  nav.tabs{scrollbar-width:none;}
   nav.tabs button{
     border:none; background:transparent; font-family:inherit; font-weight:700; font-size:13.5px;
     padding:9px 20px; border-radius:999px; cursor:pointer; color:var(--muted); transition:all .2s ease;
+    flex:none; white-space:nowrap;
   }
   nav.tabs button.active{background:var(--ink); color:#fff;}
 
@@ -172,6 +179,32 @@
 
   footer.note{text-align:center; color:var(--muted); font-size:12px; margin-top:36px;}
   a.reset{color:var(--muted); text-decoration:underline; cursor:pointer;}
+
+  /* ── ajustes para telemóvel ── */
+  @media(max-width:640px){
+    .wrap{padding:22px 16px 70px;}
+    .brand h1{font-size:26px;}
+    .brand p{font-size:12.5px;}
+    header.top{align-items:stretch;}
+    .actions{width:100%;}
+    .actions .btn{flex:1; min-width:0; white-space:nowrap;}
+    .card{padding:16px;}
+    .stats{grid-template-columns:repeat(2,1fr); gap:10px;}
+    .stat{padding:14px 15px;}
+    .stat .value{font-size:21px;}
+    .tbl-head{flex-direction:column; align-items:stretch; gap:10px;}
+    .search-input{width:100%; min-width:0; box-sizing:border-box;}
+    .inline-form{flex-direction:column; align-items:stretch;}
+    .inline-form .field{width:100%;}
+    .num-input,.month-input{max-width:none; width:100%; box-sizing:border-box;}
+    table{font-size:12px;}
+    th,td{padding:7px 6px;}
+    .modal{padding:20px; border-radius:18px;}
+    .entry-row{flex-wrap:wrap;}
+  }
+  @media(max-width:380px){
+    .stats{grid-template-columns:1fr;}
+  }
 </style>
 </head>
 <body>
