@@ -227,6 +227,7 @@
   <nav class="tabs" id="tabs" style="display:none;">
     <button class="active" data-view="month">Este mês</button>
     <button data-view="year">Ano</button>
+    <button data-view="savings">Poupança 🐷</button>
     <button data-view="fuel">Gasolina ⛽</button>
     <button data-view="invest">Investimentos 📈</button>
     <button data-view="roupa">Roupa 👗</button>
@@ -239,6 +240,7 @@
 
   <section id="monthView" style="display:none;"></section>
   <section id="yearView" style="display:none;"></section>
+  <section id="savingsView" style="display:none;"></section>
   <section id="fuelView" style="display:none;"></section>
   <section id="investView" style="display:none;"></section>
   <section id="roupaView" style="display:none;"></section>
@@ -325,6 +327,7 @@ function euro(n){
 function isSalario(cat){ const k=normKey(cat); return k.includes('salario')||k.includes('ordenado')||k.includes('vencimento'); }
 function isPoupanca(cat){ return normKey(cat).includes('poupan'); }
 function isMesada(cat){ return normKey(cat).includes('mesada'); }
+function isCartaoRefeicao(cat){ const k=normKey(cat); return k.includes('cartao') && k.includes('refeicao'); }
 function isEspecial(cat){ return isSalario(cat) || isPoupanca(cat) || isMesada(cat); }
 
 // ── harmonização de descrições ──
@@ -492,7 +495,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>{
   b.addEventListener('click', ()=>{
     document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
-    ['month','year','fuel','invest','roupa'].forEach(v=>{
+    ['month','year','savings','fuel','invest','roupa'].forEach(v=>{
       document.getElementById(v+'View').style.display = b.dataset.view===v ? '' : 'none';
     });
   });
@@ -500,6 +503,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>{
 
 let currentMonthKey = null;
 let currentYear = null;
+let currentSavingsYear = null;
 let activeCatFilter = new Set();
 let searchText = '';
 let monthChart = null;
@@ -525,17 +529,18 @@ function render(){
     : 'importa o teu extrato e vê os gastos organizados';
 
   if(!hasData){
-    ['month','year','fuel','invest','roupa'].forEach(v=> document.getElementById(v+'View').style.display='none');
+    ['month','year','savings','fuel','invest','roupa'].forEach(v=> document.getElementById(v+'View').style.display='none');
     return;
   }
 
   const activeView = document.querySelector('nav.tabs button.active').dataset.view;
-  ['month','year','fuel','invest','roupa'].forEach(v=>{
+  ['month','year','savings','fuel','invest','roupa'].forEach(v=>{
     document.getElementById(v+'View').style.display = activeView===v ? '' : 'none';
   });
 
   renderMonthView();
   renderYearView();
+  renderSavingsView();
   renderFuelView();
   renderInvestView();
   renderRoupaView();
@@ -549,6 +554,7 @@ function renderMonthView(){
   const monthTx = TX.filter(t=>t.date.slice(0,7)===currentMonthKey);
   const salario = monthTx.filter(t=>isSalario(t.cat)).reduce((s,t)=>s+Math.abs(t.amount),0);
   const mesada = monthTx.filter(t=>isMesada(t.cat)).reduce((s,t)=>s+Math.abs(t.amount),0);
+  const cartaoRefeicao = monthTx.filter(t=>isCartaoRefeicao(t.cat) && t.amount>0).reduce((s,t)=>s+t.amount,0);
   const poupanca = monthTx.filter(t=>isPoupanca(t.cat)).reduce((s,t)=>s+Math.abs(t.amount),0);
 
   const naoEspecial = monthTx.filter(t=>!isEspecial(t.cat));
@@ -559,7 +565,7 @@ function renderMonthView(){
     .sort((a,b)=>b[1]-a[1]);
   const creditSurplus = Object.values(catNet).filter(v=>v>0).reduce((a,b)=>a+b,0);
   const gasto = catEntries.reduce((s,[,v])=>s+v,0) - creditSurplus;   // saídas − devoluções (global)
-  const recebido = salario + mesada;                  // Total recebido = salário + mesada
+  const recebido = salario + mesada + cartaoRefeicao;  // Total recebido = salário + mesada + cartão refeição
   const podiaGastar = recebido - poupanca;            // o que podia mesmo gastar
   const saldo = podiaGastar - gasto;                  // sobra
 
@@ -577,7 +583,7 @@ function renderMonthView(){
       <button class="btn btn-ghost btn-sm" id="deleteMonthBtn">🗑 Apagar este mês</button>
     </div>
     <div class="stats">
-      <div class="stat receita"><div class="label">Total recebido</div><div class="value">${euro(recebido)}</div><div class="sub">salário + mesada</div></div>
+      <div class="stat receita"><div class="label">Total recebido</div><div class="value">${euro(recebido)}</div><div class="sub">salário + mesada + refeição</div></div>
       <div class="stat disponivel"><div class="label">Podia gastar</div><div class="value">${euro(podiaGastar)}</div><div class="sub">recebido − poupança</div></div>
       <div class="stat gasto"><div class="label">Total gasto</div><div class="value">${euro(gasto)}</div></div>
       <div class="stat saldo"><div class="label">Saldo</div><div class="value ${saldo>=0?'pos':'neg'}">${euro(saldo)}</div><div class="sub">podia gastar − despesas</div></div>
@@ -1042,22 +1048,25 @@ function renderYearView(){
   const grandTotal = naoEspecialY.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0)
                    - naoEspecialY.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
 
-  // salário, mesada e poupança por mês
+  // salário, mesada, cartão refeição e poupança por mês
   const savingsByMonth = new Array(12).fill(0);
   const salarioByMonth = new Array(12).fill(0);
   const mesadaByMonth = new Array(12).fill(0);
+  const cartaoRefeicaoByMonth = new Array(12).fill(0);
   allYearTx.forEach(t=>{
     const mo = +t.date.slice(5,7) - 1;
     if(isPoupanca(t.cat)) savingsByMonth[mo] += Math.abs(t.amount);
     else if(isSalario(t.cat)) salarioByMonth[mo] += Math.abs(t.amount);
     else if(isMesada(t.cat)) mesadaByMonth[mo] += Math.abs(t.amount);
+    else if(isCartaoRefeicao(t.cat) && t.amount>0) cartaoRefeicaoByMonth[mo] += t.amount;
   });
   let run = 0;
   const savingsCumulative = savingsByMonth.map(v=>{ run+=v; return run; });
   const poupancaYear = savingsByMonth.reduce((a,b)=>a+b,0);
   const salarioYear = salarioByMonth.reduce((a,b)=>a+b,0);
   const mesadaYear = mesadaByMonth.reduce((a,b)=>a+b,0);
-  const recebidoYear = salarioYear + mesadaYear;          // salário + mesada
+  const cartaoRefeicaoYear = cartaoRefeicaoByMonth.reduce((a,b)=>a+b,0);
+  const recebidoYear = salarioYear + mesadaYear + cartaoRefeicaoYear;  // salário + mesada + cartão refeição
   const podiaGastarYear = recebidoYear - poupancaYear;    // recebido − poupança
   const saldoYear = podiaGastarYear - grandTotal;         // podia gastar − despesas
   const bestSavingMo = savingsByMonth.indexOf(Math.max(...savingsByMonth));
@@ -1069,19 +1078,14 @@ function renderYearView(){
       </select>
     </div>
     <div class="stats">
-      <div class="stat receita"><div class="label">Total recebido ${currentYear}</div><div class="value">${euro(recebidoYear)}</div><div class="sub">salário + mesada</div></div>
+      <div class="stat receita"><div class="label">Total recebido ${currentYear}</div><div class="value">${euro(recebidoYear)}</div><div class="sub">salário + mesada + refeição</div></div>
       <div class="stat disponivel"><div class="label">Podia gastar</div><div class="value">${euro(podiaGastarYear)}</div><div class="sub">recebido − poupança</div></div>
       <div class="stat gasto"><div class="label">Total gasto ${currentYear}</div><div class="value">${euro(grandTotal)}</div></div>
       <div class="stat saldo"><div class="label">Saldo do ano</div><div class="value ${saldoYear>=0?'pos':'neg'}">${euro(saldoYear)}</div><div class="sub">podia gastar − despesas</div></div>
-      <div class="stat poupei"><div class="label">Poupei em ${currentYear} 🐷</div><div class="value">${euro(poupancaYear)}</div>${poupancaYear>0?`<div class="sub">melhor mês: ${MONTHS_PT[bestSavingMo]}</div>`:''}</div>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <h3>gastos totais por mês</h3>
       <canvas id="yearBar" height="90"></canvas>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <h3>poupança ao longo de ${currentYear} 🐷</h3>
-      ${poupancaYear>0 ? '<canvas id="savingsChart" height="90"></canvas>' : '<p style="color:var(--muted); font-size:13px;">ainda sem movimentos na categoria <b>Poupança</b> este ano.</p>'}
     </div>
     <div class="card">
       <h3>mapa de gastos — categoria × mês</h3>
@@ -1136,6 +1140,43 @@ function renderYearView(){
       plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(c)=>euro(c.raw)}} },
       scales:{ y:{ ticks:{ callback:(v)=>euro(v) }, grid:{color:'#F5EBEF'} }, x:{ grid:{display:false} } }
     }
+  });
+}
+
+function renderSavingsView(){
+  const el = document.getElementById('savingsView');
+  const yearsAvail = [...new Set(TX.map(t=>t.date.slice(0,4)))].sort().reverse();
+  if(!currentSavingsYear || !yearsAvail.includes(currentSavingsYear)) currentSavingsYear = yearsAvail[0];
+
+  const yearTx = TX.filter(t=>t.date.slice(0,4)===currentSavingsYear);
+  const savingsByMonth = new Array(12).fill(0);
+  yearTx.forEach(t=>{ if(isPoupanca(t.cat)) savingsByMonth[+t.date.slice(5,7)-1] += Math.abs(t.amount); });
+
+  let run = 0;
+  const savingsCumulative = savingsByMonth.map(v=>{ run+=v; return run; });
+  const poupancaYear = savingsByMonth.reduce((a,b)=>a+b,0);
+  const monthsWithSaving = savingsByMonth.filter(v=>v>0).length || 1;
+  const media = poupancaYear / monthsWithSaving;
+  const bestSavingMo = savingsByMonth.indexOf(Math.max(...savingsByMonth));
+
+  el.innerHTML = `
+    <div class="row-select">
+      <select id="savingsYearSel">${yearsAvail.map(y=>`<option ${y===currentSavingsYear?'selected':''}>${y}</option>`).join('')}</select>
+    </div>
+    <div class="stats">
+      <div class="stat poupei"><div class="label">Poupei em ${currentSavingsYear} 🐷</div><div class="value">${euro(poupancaYear)}</div></div>
+      <div class="stat"><div class="label">Média mensal</div><div class="value">${euro(media)}</div></div>
+      <div class="stat saldo"><div class="label">Melhor mês</div><div class="value pos">${poupancaYear>0 ? MONTHS_PT[bestSavingMo] : '—'}</div></div>
+    </div>
+    <div class="card">
+      <h3>poupança ao longo de ${currentSavingsYear}</h3>
+      ${poupancaYear>0 ? '<canvas id="savingsChart" height="90"></canvas>' : '<p style="color:var(--muted); font-size:13px;">ainda sem movimentos na categoria <b>Poupança</b> este ano.</p>'}
+    </div>
+  `;
+
+  document.getElementById('savingsYearSel').addEventListener('change', (e)=>{
+    currentSavingsYear = e.target.value;
+    renderSavingsView();
   });
 
   if(savingsChart) savingsChart.destroy();
