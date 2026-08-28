@@ -1,4 +1,4 @@
-const CACHE_NAME = 'as-minhas-contas-v1';
+const CACHE_NAME = 'as-minhas-contas-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -24,14 +24,14 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first for the app shell (so updates show up), falling back to cache when offline.
-// Third-party CDN scripts (fonts, xlsx, chart.js) are left to the browser's own HTTP cache.
+// Network-first, sempre a ignorar a cache HTTP do browser (não só a cache do service worker),
+// para que uma atualização no GitHub apareça sempre que houver internet.
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then((response) => {
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
