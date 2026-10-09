@@ -576,7 +576,7 @@ function renderMonthView(){
   const salario = monthTx.filter(t=>isSalario(t.cat)).reduce((s,t)=>s+Math.abs(t.amount),0);
   const mesada = monthTx.filter(t=>isMesada(t.cat)).reduce((s,t)=>s+Math.abs(t.amount),0);
   const cartaoRefeicao = monthTx.filter(t=>isCartaoRefeicao(t.cat) && t.amount>0).reduce((s,t)=>s+t.amount,0);
-  const poupanca = monthTx.filter(t=>isPoupanca(t.cat)).reduce((s,t)=>s+Math.abs(t.amount),0);
+  const poupanca = monthTx.filter(t=>isPoupanca(t.cat)).reduce((s,t)=>s-t.amount,0);   // negativo no extrato = pus na poupança (+); positivo = tirei (−)
 
   const naoEspecial = monthTx.filter(t=>!isEspecial(t.cat));
   const catNet = {};
@@ -1095,7 +1095,7 @@ function renderYearView(){
   const cartaoRefeicaoByMonth = new Array(12).fill(0);
   allYearTx.forEach(t=>{
     const mo = +t.date.slice(5,7) - 1;
-    if(isPoupanca(t.cat)) savingsByMonth[mo] += Math.abs(t.amount);
+    if(isPoupanca(t.cat)) savingsByMonth[mo] -= t.amount;   // negativo = pus (+), positivo = tirei (−)
     else if(isSalario(t.cat)) salarioByMonth[mo] += Math.abs(t.amount);
     else if(isMesada(t.cat)) mesadaByMonth[mo] += Math.abs(t.amount);
     else if(isCartaoRefeicao(t.cat) && t.amount>0) cartaoRefeicaoByMonth[mo] += t.amount;
@@ -1214,14 +1214,15 @@ function renderSavingsView(){
 
   const yearTx = TX.filter(t=>t.date.slice(0,4)===currentSavingsYear);
   const savingsByMonth = new Array(12).fill(0);
-  yearTx.forEach(t=>{ if(isPoupanca(t.cat)) savingsByMonth[+t.date.slice(5,7)-1] += Math.abs(t.amount); });
+  yearTx.forEach(t=>{ if(isPoupanca(t.cat)) savingsByMonth[+t.date.slice(5,7)-1] -= t.amount; });   // negativo = pus (+), positivo = tirei (−)
 
   let run = 0;
   const savingsCumulative = savingsByMonth.map(v=>{ run+=v; return run; });
   const poupancaYear = savingsByMonth.reduce((a,b)=>a+b,0);
-  const monthsWithSaving = savingsByMonth.filter(v=>v>0).length || 1;
+  const monthsWithSaving = savingsByMonth.filter(v=>v!==0).length || 1;
   const media = poupancaYear / monthsWithSaving;
   const bestSavingMo = savingsByMonth.indexOf(Math.max(...savingsByMonth));
+  const hasSavings = savingsByMonth.some(v=>v!==0);
 
   el.innerHTML = `
     <div class="row-select">
@@ -1234,7 +1235,7 @@ function renderSavingsView(){
     </div>
     <div class="card">
       <h3>poupança ao longo de ${currentSavingsYear}</h3>
-      ${poupancaYear>0 ? '<canvas id="savingsChart" height="90"></canvas>' : '<p style="color:var(--muted); font-size:13px;">ainda sem movimentos na categoria <b>Poupança</b> este ano.</p>'}
+      ${hasSavings ? '<canvas id="savingsChart" height="90"></canvas>' : '<p style="color:var(--muted); font-size:13px;">ainda sem movimentos na categoria <b>Poupança</b> este ano.</p>'}
     </div>
   `;
 
@@ -1244,7 +1245,7 @@ function renderSavingsView(){
   });
 
   if(savingsChart) savingsChart.destroy();
-  if(poupancaYear>0){
+  if(hasSavings){
     const sctx = document.getElementById('savingsChart');
     savingsChart = new Chart(sctx, {
       data:{
